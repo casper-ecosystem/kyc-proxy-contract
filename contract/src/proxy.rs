@@ -111,6 +111,7 @@ pub extern "C" fn call() {
     runtime::put_key(&format!("{}-proxy_contract", proxy_name), contract_hash.into());
     runtime::put_key(&format!("{}-proxy_access_token", proxy_name), access_uref.into());
     // Added for the testing convenience.
+
     runtime::put_key(
         &format!("{}-proxy_contract_hash", proxy_name),
         storage::new_uref(contract_hash).into(),
