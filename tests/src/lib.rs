@@ -36,7 +36,7 @@ impl ProxyContract {
         let participant_three_account_addr = AccountHash::from(&participant_three_public_key);
 
         let code = PathBuf::from("kyc-proxy.wasm");
-        let args = runtime_args! {"initial_providers"=> Option::<Vec<ContractPackageHash>>::None};
+        let args = runtime_args! {"name"=> "kyc", "initial_providers"=> Option::<Vec<ContractPackageHash>>::None};
         let deploy = DeployItemBuilder::new()
             .with_empty_payment_bytes(runtime_args! {ARG_AMOUNT => *DEFAULT_PAYMENT})
             .with_session_code(code, args)
