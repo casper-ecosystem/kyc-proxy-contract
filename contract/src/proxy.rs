@@ -107,9 +107,18 @@ pub extern "C" fn call() {
     );
     let (contract_hash, _) =
         storage::add_contract_version(contract_package_hash, entry_points, named_keys);
-    runtime::put_key(&format!("{}-proxy_package_hash", proxy_name), contract_package_hash.into());
-    runtime::put_key(&format!("{}-proxy_contract", proxy_name), contract_hash.into());
-    runtime::put_key(&format!("{}-proxy_access_token", proxy_name), access_uref.into());
+    runtime::put_key(
+        &format!("{}-proxy_package_hash", proxy_name),
+        contract_package_hash.into(),
+    );
+    runtime::put_key(
+        &format!("{}-proxy_contract", proxy_name),
+        contract_hash.into(),
+    );
+    runtime::put_key(
+        &format!("{}-proxy_access_token", proxy_name),
+        access_uref.into(),
+    );
     // // Added for the testing convenience.
     runtime::put_key(
         &format!("{}-proxy_contract_hash", proxy_name),
