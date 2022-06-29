@@ -1,0 +1,6 @@
+make --dry-run --always-make --keep-going --print-directory
+make: Entering directory `/Volumes/Data/Work/CasperLabs/kyc-proxy-contract'
+rustup default nightly-2021-06-17-x86_64-unknown-linux-gnu
+rustup target add wasm32-unknown-unknown
+make: Leaving directory `/Volumes/Data/Work/CasperLabs/kyc-proxy-contract'
+ 

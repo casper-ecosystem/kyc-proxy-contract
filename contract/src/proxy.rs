@@ -68,7 +68,10 @@ pub extern "C" fn call() {
 
     entry_points.add_entry_point(EntryPoint::new(
         "is_kyc_proved",
-        vec![],
+        vec![
+            Parameter::new("account", Key::cl_type()),
+            Parameter::new("index", CLType::Option(Box::new(U256::cl_type()))),
+        ],
         CLType::Bool,
         EntryPointAccess::Public,
         EntryPointType::Contract,
@@ -100,17 +103,17 @@ pub extern "C" fn call() {
 
     let mut named_keys = NamedKeys::new();
     named_keys.insert(
-        "kyc-proxy_contract_package".to_string(),
+        "kyc-proxy_contract_package_hash".to_string(),
         storage::new_uref(contract_package_hash).into(),
     );
     let (contract_hash, _) =
         storage::add_contract_version(contract_package_hash, entry_points, named_keys);
 
-    runtime::put_key("kyc-proxy_contract", contract_hash.into());
+    runtime::put_key("kyc-proxy_contract_hash", contract_hash.into());
     runtime::put_key("kyc-proxy_access_token", access_uref.into());
     // Added for the testing convinience.
     runtime::put_key(
-        "kyc-proxy_contract_hash",
+        "kyc-proxy_contract_hash_wrapped",
         storage::new_uref(contract_hash).into(),
     );
 

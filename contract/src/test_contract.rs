@@ -10,7 +10,7 @@ use casper_types::{runtime_args, ApiError, Key, RuntimeArgs, U256};
 pub extern "C" fn call() {
     if get_named_arg::<bool>("result")
         != call_versioned_contract::<bool>(
-            get_named_arg("kyc_proxy_package_hash"),
+            get_named_arg("kyc-proxy_package_hash"),
             None,
             "is_kyc_proved",
             runtime_args! {
