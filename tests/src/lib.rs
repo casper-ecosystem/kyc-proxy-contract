@@ -10,6 +10,7 @@ use casper_execution_engine::storage::global_state::in_memory::InMemoryGlobalSta
 use casper_types::system::mint;
 use casper_types::{account::AccountHash, runtime_args, PublicKey, RuntimeArgs, SecretKey, U512};
 use casper_types::{ContractHash, ContractPackageHash, Key};
+use rand::Rng;
 
 pub struct ProxyContract {
     pub builder: WasmTestBuilder<InMemoryGlobalState>,
@@ -24,6 +25,7 @@ impl ProxyContract {
     pub fn deploy() -> Self {
         // We create 3 users. One to oversee and deploy the contract, one to send the payment
         // and one to receive it.
+        let mut rng = rand::thread_rng();
         let admin_public_key: PublicKey =
             (&SecretKey::ed25519_from_bytes([1u8; 32]).unwrap()).into();
         let participant_two_public_key: PublicKey =
@@ -42,6 +44,7 @@ impl ProxyContract {
             .with_session_code(code, args)
             .with_address(admin_account_addr)
             .with_authorization_keys(&[admin_account_addr])
+            .with_deploy_hash(rng.gen())
             .build();
         let execute_request = ExecuteRequestBuilder::from_deploy_item(deploy).build();
 
@@ -58,7 +61,7 @@ impl ProxyContract {
                     mint::ARG_TARGET => admin_public_key.clone(),
                     mint::ARG_ID => <Option::<u64>>::None
                 })
-                .with_deploy_hash([1; 32])
+                .with_deploy_hash(rng.gen())
                 .build();
 
             ExecuteRequestBuilder::from_deploy_item(deploy_item).build()
@@ -78,7 +81,7 @@ impl ProxyContract {
                     mint::ARG_TARGET => participant_two_public_key.clone(),
                     mint::ARG_ID => <Option::<u64>>::None
                 })
-                .with_deploy_hash([1; 32])
+                .with_deploy_hash(rng.gen())
                 .build();
 
             ExecuteRequestBuilder::from_deploy_item(deploy_item).build()
@@ -98,7 +101,7 @@ impl ProxyContract {
                     mint::ARG_TARGET => participant_three_public_key.clone(),
                     mint::ARG_ID => <Option::<u64>>::None
                 })
-                .with_deploy_hash([1; 32])
+                .with_deploy_hash(rng.gen())
                 .build();
 
             ExecuteRequestBuilder::from_deploy_item(deploy_item).build()
@@ -161,13 +164,14 @@ impl ProxyContract {
         deployer: AccountHash,
         kyc_name: &str,
     ) -> (ContractPackageHash, ContractHash) {
+        let mut rng = rand::thread_rng();
         let kyc_code = PathBuf::from("kyc-contract.wasm");
         let mut meta = BTreeMap::new();
         meta.insert("origin".to_string(), "kyc".to_string());
 
         let kyc_args = runtime_args! {
             "name" => kyc_name,
-            "contract_name" => "kyc",
+            "contract_name" => kyc_name,
             "symbol" => "symbol",
             "meta" => meta,
             "admin" => Key::Account(deployer)
@@ -177,15 +181,19 @@ impl ProxyContract {
             .with_session_code(kyc_code, kyc_args)
             .with_address(deployer)
             .with_authorization_keys(&[deployer])
+            .with_deploy_hash(rng.gen())
             .build();
         let execute_request = ExecuteRequestBuilder::from_deploy_item(kyc_session).build();
-        self.builder.exec(execute_request).commit();
+        self.builder.exec(execute_request).expect_success().commit();
+        println!("admin:{:?}\n",self.builder.get_account(self.admin_account.1).unwrap());
+        println!("p2:{:?}\n",self.builder.get_account(self.participant_two.1).unwrap());
+        println!("p3:{:?}\n",self.builder.get_account(self.participant_three.1).unwrap());
         (
             self.builder
                 .query(
                     None,
                     Key::Account(deployer),
-                    &["kyc_package_hash_wrapped".to_string()],
+                    &[format!("{}_package_hash_wrapped", kyc_name)],
                 )
                 .expect("should be stored value.")
                 .as_cl_value()
@@ -197,7 +205,7 @@ impl ProxyContract {
                 .query(
                     None,
                     Key::Account(deployer),
-                    &["kyc_contract_hash_wrapped".to_string()],
+                    &[format!("{}_contract_hash_wrapped", kyc_name)],
                 )
                 .expect("should be stored value.")
                 .as_cl_value()
@@ -209,6 +217,7 @@ impl ProxyContract {
     }
 
     pub fn add_kyc(&mut self, deployer: AccountHash, kyc_hash: [u8; 32], recipient: AccountHash) {
+        let mut rng = rand::thread_rng();
         let mut token_meta = BTreeMap::new();
         token_meta.insert("status".to_string(), "active".to_string());
         let args = runtime_args! {
@@ -221,6 +230,7 @@ impl ProxyContract {
             .with_stored_versioned_contract_by_hash(kyc_hash, None, "mint", args)
             .with_address(deployer)
             .with_authorization_keys(&[deployer])
+            .with_deploy_hash(rng.gen())
             .build();
         let execute_request = ExecuteRequestBuilder::from_deploy_item(deploy).build();
         self.builder.exec(execute_request).commit();
@@ -246,11 +256,13 @@ impl ProxyContract {
 
     /// Function that handles the creation and running of sessions.
     fn call(&mut self, caller: AccountHash, method: &str, args: RuntimeArgs) {
+        let mut rng = rand::thread_rng();
         let deploy = DeployItemBuilder::new()
             .with_empty_payment_bytes(runtime_args! {ARG_AMOUNT => *DEFAULT_PAYMENT})
             .with_stored_versioned_contract_by_hash(self.contract_hash, None, method, args)
             .with_address(caller)
             .with_authorization_keys(&[caller])
+            .with_deploy_hash(rng.gen())
             .build();
         let execute_request = ExecuteRequestBuilder::from_deploy_item(deploy).build();
         self.builder.exec(execute_request).commit();
@@ -281,6 +293,7 @@ impl ProxyContract {
     }
 
     pub fn is_kyc_proved(&mut self, result: bool) -> &mut WasmTestBuilder<InMemoryGlobalState> {
+        let mut rng = rand::thread_rng();
         let code = PathBuf::from("test_contract.wasm");
         let deploy = DeployItemBuilder::new()
             .with_empty_payment_bytes(runtime_args! {ARG_AMOUNT => *DEFAULT_PAYMENT})
@@ -293,6 +306,7 @@ impl ProxyContract {
             )
             .with_address(self.admin_account.1)
             .with_authorization_keys(&[self.admin_account.1])
+            .with_deploy_hash(rng.gen())
             .build();
         let execute_request = ExecuteRequestBuilder::from_deploy_item(deploy).build();
         self.builder.exec(execute_request).commit()
