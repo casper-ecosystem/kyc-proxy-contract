@@ -22,11 +22,13 @@ use casper_types::{
 };
 use casper_types::{runtime_args, CLValue, RuntimeArgs, U256};
 
+/// Endpoint to initialize proxy contract with initial providers
 #[no_mangle]
 pub extern "C" fn init() {
     ProviderDict::init(runtime::get_named_arg("initial_providers"))
 }
 
+/// Endpoint to check if an account is kyc proved
 #[no_mangle]
 pub extern "C" fn is_kyc_proved() {
     let account = runtime::get_named_arg::<Key>("account");
@@ -35,16 +37,19 @@ pub extern "C" fn is_kyc_proved() {
     runtime::ret(CLValue::from_t(ret).unwrap_or_revert());
 }
 
+/// Endpoint to add kyc provider
 #[no_mangle]
 pub extern "C" fn add_kyc_provider() {
     ProviderDict::open().add_kyc_provider(runtime::get_named_arg("provider"))
 }
 
+/// Endpoint to ban kyc provider
 #[no_mangle]
 pub extern "C" fn ban_provider() {
     ProviderDict::open().ban_provider(runtime::get_named_arg("provider"))
 }
 
+/// Endpoint to unban kyc provider
 #[no_mangle]
 pub extern "C" fn unban_provider() {
     ProviderDict::open().unban_provider(runtime::get_named_arg("provider"))
@@ -107,9 +112,18 @@ pub extern "C" fn call() {
     );
     let (contract_hash, _) =
         storage::add_contract_version(contract_package_hash, entry_points, named_keys);
-    runtime::put_key(&format!("{}-proxy_package_hash", proxy_name), contract_package_hash.into());
-    runtime::put_key(&format!("{}-proxy_contract", proxy_name), contract_hash.into());
-    runtime::put_key(&format!("{}-proxy_access_token", proxy_name), access_uref.into());
+    runtime::put_key(
+        &format!("{}-proxy_package_hash", proxy_name),
+        contract_package_hash.into(),
+    );
+    runtime::put_key(
+        &format!("{}-proxy_contract", proxy_name),
+        contract_hash.into(),
+    );
+    runtime::put_key(
+        &format!("{}-proxy_access_token", proxy_name),
+        access_uref.into(),
+    );
     // // Added for the testing convenience.
     runtime::put_key(
         &format!("{}-proxy_contract_hash", proxy_name),
@@ -138,6 +152,8 @@ struct ProviderDict {
 }
 
 impl ProviderDict {
+    /// Create new URef that represents a seed for a dictionary partition of the global state and puts it under "kyc_providers" named key
+    /// and store initial_providers in the dictionary, set them validated
     fn init(initial_providers: Vec<ContractPackageHash>) {
         let dict_uref = new_dictionary("kyc_providers").unwrap_or_revert();
         for (provider_index, provider_package_hash) in initial_providers.iter().enumerate() {
@@ -151,6 +167,8 @@ impl ProviderDict {
         dictionary_put(dict_uref, "len", initial_providers.len() as u64);
     }
 
+    /// Return the URef stored under "kyc_providers" named key to get dictionary
+    /// with the length of stored providers
     fn open() -> Self {
         let uref = *runtime::get_key("kyc_providers")
             .unwrap_or_revert()
@@ -162,6 +180,7 @@ impl ProviderDict {
         ProviderDict { uref, len }
     }
 
+    /// Store new kyc provider in the dictionary and set them validated
     fn add_kyc_provider(&self, provider_key: Key) {
         let (provider_package_hash, str_provider) = Self::convert_provider_key(provider_key);
         if dictionary_get::<bool>(self.uref, &str_provider)
@@ -174,6 +193,7 @@ impl ProviderDict {
         }
     }
 
+    /// Set a stored provider as invalidated in the dictionary
     fn ban_provider(&self, provider_key: Key) {
         let (_, str_provider) = Self::convert_provider_key(provider_key);
         if let Some(true) = dictionary_get::<bool>(self.uref, &str_provider).unwrap_or_revert() {
@@ -181,6 +201,7 @@ impl ProviderDict {
         }
     }
 
+    /// Set a stored provider as validated in the dictionary
     fn unban_provider(&self, provider_key: Key) {
         let (_, str_provider) = Self::convert_provider_key(provider_key);
         if let Some(false) = dictionary_get::<bool>(self.uref, &str_provider).unwrap_or_revert() {
@@ -188,6 +209,7 @@ impl ProviderDict {
         }
     }
 
+    /// Convert provider key to ContractPackageHash and String
     fn convert_provider_key(provider_key: Key) -> (ContractPackageHash, String) {
         let provider_package_hash = match provider_key {
             Key::Hash(provider_hash) => ContractPackageHash::from(provider_hash),
@@ -196,6 +218,7 @@ impl ProviderDict {
         (provider_package_hash, provider_package_hash.to_string())
     }
 
+    /// Check if account is kyc proved by calling is_kyc_proved_single function
     fn is_kyc_proved(&self, account: Key, index: Option<U256>) -> bool {
         for provider_index in 0..=self.len {
             // check if there is a provider stored at the index
@@ -219,6 +242,7 @@ impl ProviderDict {
         false
     }
 
+    /// Check if provided package hash is kyc provided through kyc contract
     fn is_kyc_proved_single(
         &self,
         provider_package_hash: ContractPackageHash,
