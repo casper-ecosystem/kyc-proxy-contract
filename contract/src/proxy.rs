@@ -170,7 +170,7 @@ impl ProviderDict {
         dictionary_put(dict_uref, "len", initial_providers.len() as u64);
     }
 
-    /// Return the a struct consisting of the  URef stored under "kyc_providers" named key that holds the corresponding dictionary,
+    /// Return a struct consisting of the URef stored under "kyc_providers" named key that holds the corresponding dictionary,
     /// and the number of stored providers.
     fn open() -> Self {
         let uref = *runtime::get_key("kyc_providers")
