@@ -185,18 +185,6 @@ impl ProxyContract {
             .build();
         let execute_request = ExecuteRequestBuilder::from_deploy_item(kyc_session).build();
         self.builder.exec(execute_request).expect_success().commit();
-        println!(
-            "admin:{:?}\n",
-            self.builder.get_account(self.admin_account.1).unwrap()
-        );
-        println!(
-            "p2:{:?}\n",
-            self.builder.get_account(self.participant_two.1).unwrap()
-        );
-        println!(
-            "p3:{:?}\n",
-            self.builder.get_account(self.participant_three.1).unwrap()
-        );
         (
             self.builder
                 .query(
