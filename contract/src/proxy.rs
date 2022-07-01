@@ -3,30 +3,34 @@
 
 extern crate alloc;
 
-use alloc::boxed::Box;
-use alloc::string::String;
-use alloc::{format, vec};
-use alloc::{string::ToString, vec::Vec};
-use casper_contract::contract_api::runtime::call_versioned_contract;
-use casper_contract::contract_api::storage::{dictionary_get, dictionary_put};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec::Vec,
+    {format, vec},
+};
 use casper_contract::{
     contract_api::{
-        runtime::{self, revert},
-        storage::{self, new_dictionary},
+        runtime::{self, call_versioned_contract, revert},
+        storage::{self, dictionary_get, dictionary_put, new_dictionary},
     },
     unwrap_or_revert::UnwrapOrRevert,
 };
 use casper_types::{
-    contracts::NamedKeys, ApiError, CLType, CLTyped, ContractPackageHash, EntryPoint,
-    EntryPointAccess, EntryPointType, EntryPoints, Key, Parameter, URef,
+    contracts::NamedKeys, runtime_args, ApiError, CLType, CLTyped, CLValue, ContractPackageHash,
+    EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Key, Parameter, RuntimeArgs, URef,
+    U256,
 };
-use casper_types::{runtime_args, CLValue, RuntimeArgs, U256};
 
+/// EntryPoint that initializes the contract's storage scheme. This entry_point can only be called once,
+/// as on the second call the creation of the dictionary will fail because it already exists.
 #[no_mangle]
 pub extern "C" fn init() {
     ProviderDict::init(runtime::get_named_arg("initial_providers"))
 }
 
+/// EntryPoint that checks with each stored KYC provider contract for an account's validity.
+/// This EntryPoint can only be called from inside a contract or a session code since it returns a value.
 #[no_mangle]
 pub extern "C" fn is_kyc_proved() {
     let account = runtime::get_named_arg::<Key>("account");
@@ -35,16 +39,21 @@ pub extern "C" fn is_kyc_proved() {
     runtime::ret(CLValue::from_t(ret).unwrap_or_revert());
 }
 
+/// Add a new entry to the list of KYC providers.
 #[no_mangle]
 pub extern "C" fn add_kyc_provider() {
     ProviderDict::open().add_kyc_provider(runtime::get_named_arg("provider"))
 }
 
+/// Declare a KYC provider contract as not acceptable.
+/// This provider will not be asked in any of the following validity checks.
 #[no_mangle]
 pub extern "C" fn ban_provider() {
     ProviderDict::open().ban_provider(runtime::get_named_arg("provider"))
 }
 
+/// Restore a KYC provider contract's accessibility through the proxy.
+/// This provider will be asked for an account's validity during checks.
 #[no_mangle]
 pub extern "C" fn unban_provider() {
     ProviderDict::open().unban_provider(runtime::get_named_arg("provider"))
@@ -119,7 +128,6 @@ pub extern "C" fn call() {
         &format!("{}-proxy_access_token", proxy_name),
         access_uref.into(),
     );
-    // // Added for the testing convenience.
     runtime::put_key(
         &format!("{}-proxy_contract_hash", proxy_name),
         storage::new_uref(contract_hash).into(),
@@ -147,6 +155,8 @@ struct ProviderDict {
 }
 
 impl ProviderDict {
+    /// Create a new URef that represents a seed for a dictionary partition of the global state and puts it under the "kyc_providers" named key.
+    /// It then stores initial_providers in the dictionary, while setting their status as validated.
     fn init(initial_providers: Vec<ContractPackageHash>) {
         let dict_uref = new_dictionary("kyc_providers").unwrap_or_revert();
         for (provider_index, provider_package_hash) in initial_providers.iter().enumerate() {
@@ -160,6 +170,8 @@ impl ProviderDict {
         dictionary_put(dict_uref, "len", initial_providers.len() as u64);
     }
 
+    /// Return a struct consisting of the URef stored under "kyc_providers" named key that holds the corresponding dictionary,
+    /// and the number of stored providers.
     fn open() -> Self {
         let uref = *runtime::get_key("kyc_providers")
             .unwrap_or_revert()
@@ -171,8 +183,10 @@ impl ProviderDict {
         ProviderDict { uref, len }
     }
 
+    /// Store a new KYC provider in the dictionary and set their status as validated.
     fn add_kyc_provider(&self, provider_key: Key) {
-        let (provider_package_hash, str_provider) = Self::convert_provider_key(provider_key);
+        let provider_package_hash = Self::convert_provider_key(provider_key);
+        let str_provider = provider_package_hash.to_string();
         if dictionary_get::<bool>(self.uref, &str_provider)
             .unwrap_or_revert()
             .is_none()
@@ -183,28 +197,32 @@ impl ProviderDict {
         }
     }
 
+    /// Set a stored provider as invalid in the dictionary.
     fn ban_provider(&self, provider_key: Key) {
-        let (_, str_provider) = Self::convert_provider_key(provider_key);
+        let str_provider = Self::convert_provider_key(provider_key).to_string();
         if let Some(true) = dictionary_get::<bool>(self.uref, &str_provider).unwrap_or_revert() {
             dictionary_put(self.uref, &str_provider, false);
         }
     }
 
+    /// Set a stored provider as validated in the dictionary.
     fn unban_provider(&self, provider_key: Key) {
-        let (_, str_provider) = Self::convert_provider_key(provider_key);
+        let str_provider = Self::convert_provider_key(provider_key).to_string();
         if let Some(false) = dictionary_get::<bool>(self.uref, &str_provider).unwrap_or_revert() {
             dictionary_put(self.uref, &str_provider, true);
         }
     }
 
-    fn convert_provider_key(provider_key: Key) -> (ContractPackageHash, String) {
-        let provider_package_hash = match provider_key {
+    /// Convert provider `Key` to `ContractPackageHash`.
+    fn convert_provider_key(provider_key: Key) -> ContractPackageHash {
+        match provider_key {
             Key::Hash(provider_hash) => ContractPackageHash::from(provider_hash),
             _ => revert(ApiError::User(300)),
-        };
-        (provider_package_hash, provider_package_hash.to_string())
+        }
     }
 
+    /// Check account validity by asking all stored KYC providers sequentially, and return true on the first confirmation.
+    /// If all available providers refused return false,
     fn is_kyc_proved(&self, account: Key, index: Option<U256>) -> bool {
         for provider_index in 0..=self.len {
             // check if there is a provider stored at the index
@@ -224,10 +242,10 @@ impl ProviderDict {
                 }
             }
         }
-        // if all available providers refused, return false
         false
     }
 
+    /// Call the is_kyc_proved entry point on a provider.
     fn is_kyc_proved_single(
         &self,
         provider_package_hash: ContractPackageHash,

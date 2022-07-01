@@ -6,6 +6,8 @@ use casper_contract::contract_api::runtime::{
 };
 use casper_types::{runtime_args, ApiError, Key, RuntimeArgs, U256};
 
+// Since the `is_kyc_proved` entry point on the contract returns data, it can only be called from
+// another contract or session code. This requires the use of this session code in the tests.
 #[no_mangle]
 pub extern "C" fn call() {
     if get_named_arg::<bool>("result")
