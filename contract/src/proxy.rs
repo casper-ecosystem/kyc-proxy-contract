@@ -22,7 +22,7 @@ use casper_types::{
     U256,
 };
 
-/// EntryPoint that call the initializes the contracts storage. This entry_point can only be called once,
+/// EntryPoint that initializes the contract's storage scheme. This entry_point can only be called once,
 /// as on the second call the creation of the dictionary will fail because it already exists.
 #[no_mangle]
 pub extern "C" fn init() {
